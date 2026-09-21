@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SignAI Pro | ASL Alphabet (A-Z) Sign Language Converter</title>
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  
+  <!-- MediaPipe Hands & Camera Utils Dependencies -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand">
+        <div class="logo-icon">
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v5" />
+            <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v6" />
+            <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8" />
+            <path d="M18 8a2 2 0 0 1 2 2v4a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
+          </svg>
+        </div>
+        <div>
+          <h1>SignAI<span>Pro</span></h1>
+          <p class="subtitle">Real-Time Sign Language Alphabet (A–Z) Converter</p>
+        </div>
+      </div>
+      
+      <div class="header-controls">
+        <div class="status-badge" id="cameraStatus">
+          <span class="status-dot pulse"></span>
+          <span id="statusText">Initializing Camera...</span>
+        </div>
+        <button id="toggleCameraBtn" class="btn btn-secondary">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+          Toggle Camera
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Grid Layout -->
+    <main class="app-main">
+      <!-- Left Column: Video Feed & Landmark Canvas -->
+      <section class="video-section card">
+        <div class="video-container">
+          <video id="webcam" playsinline style="display:none;"></video>
+          <canvas id="outputCanvas" width="640" height="480"></canvas>
+          
+          <!-- Camera Error / Request Permission Overlay -->
+          <div id="cameraErrorOverlay" class="camera-error-overlay" style="display:none;">
+            <div class="error-box">
+              <div class="error-icon">📷</div>
+              <h3 id="errorTitle">Camera Access Blocked or Saved</h3>
+              <p id="errorMsg">Your browser blocked camera permission for this site. Follow the steps below to unblock it:</p>
+              
+              <div class="unblock-steps">
+                <div class="step-item">
+                  <span class="step-num">1</span>
+                  <span>Click the <strong>Lock 🔒</strong> or <strong>Camera 📷</strong> icon next to <code>http://127.0.0.1:5000</code> in the browser address bar.</span>
+                </div>
+                <div class="step-item">
+                  <span class="step-num">2</span>
+                  <span>Change <strong>Camera</strong> permission from <em>Block</em> to <strong>Allow</strong>.</span>
+                </div>
+                <div class="step-item">
+                  <span class="step-num">3</span>
+                  <span>Click the button below or refresh the page (F5).</span>
+                </div>
+              </div>
+
+              <button id="retryCameraBtn" class="btn btn-primary">
+                🎥 Try Enabling Camera Again
+              </button>
+            </div>
+          </div>
+
+          <!-- Floating Video Overlay Info -->
+          <div class="video-overlay top-left">
+            <span class="fps-counter" id="fpsDisplay">0 FPS</span>
+          </div>
+
+          <div class="video-overlay top-right">
+            <div class="detection-pill" id="handDetectedPill">
+              <span class="dot"></span>
+              <span id="handDetectedText">No Hand Detected</span>
+            </div>
+          </div>
+
+          <!-- Live Gesture Result Overlay -->
+          <div class="video-overlay bottom-banner" id="liveDetectionBanner">
+            <div class="gesture-target-badge" id="targetGestureBadge">ASL Alphabet A–Z Mode</div>
+            <div class="gesture-char-huge" id="liveCharDisplay">-</div>
+            <div class="gesture-meta">
+              <div class="confidence-bar-container">
+                <div class="confidence-bar" id="confidenceBar" style="width: 0%;"></div>
+              </div>
+              <span class="confidence-val" id="confidenceVal">0% Confidence</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Camera / Model Performance Controls -->
+        <div class="card-footer video-controls">
+          <div class="control-group">
+            <label for="skeletonToggle">Show Hand Skeleton</label>
+            <input type="checkbox" id="skeletonToggle" checked>
+          </div>
+          <div class="control-group">
+            <label for="speakToggle">Auto Speak Text (TTS)</label>
+            <input type="checkbox" id="speakToggle">
+          </div>
+          <div class="control-group">
+            <label for="confidenceThreshold">Min Confidence</label>
+            <input type="range" id="confidenceThreshold" min="60" max="95" value="75">
+            <span id="thresholdVal">75%</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Column: Conversion Output & Gesture Reference -->
+      <section class="sidebar-section">
+        <!-- Live Conversion Result Card -->
+        <div class="card output-card">
+          <div class="card-header">
+            <h2>Converted Output</h2>
+            <div class="card-actions">
+              <button id="copyBtn" class="btn-icon" title="Copy Text">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+              </button>
+              <button id="speakSentenceBtn" class="btn-icon" title="Speak Sentence">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                </svg>
+              </button>
+              <button id="clearBtn" class="btn-icon btn-danger" title="Clear Buffer">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="3 6 5 6 21 6"/>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="current-letter-box">
+            <span class="label">CURRENT GESTURE</span>
+            <div class="big-letter" id="currentLetterDisplay">?</div>
+            <div class="letter-description" id="gestureDesc">Hold hand up to webcam</div>
+            <div class="action-btn-row">
+              <button id="appendCharBtn" class="btn btn-primary btn-sm">
+                + Append Letter
+              </button>
+              <button id="addSpaceBtn" class="btn btn-secondary btn-sm">
+                + Space
+              </button>
+            </div>
+          </div>
+
+          <div class="sentence-buffer-box">
+            <span class="label">TRANSCRIPT SENTENCE</span>
+            <div class="text-buffer" id="textBuffer"></div>
+          </div>
+        </div>
+
+        <!-- ASL Alphabet A-Z Reference Grid Card -->
+        <div class="card guide-card">
+          <div class="card-header">
+            <h2>ASL Alphabet Reference (A–Z)</h2>
+            <span class="pill-tag">26 Signs Supported</span>
+          </div>
+          
+          <div class="guide-content">
+            <div class="alphabet-grid" id="alphabetGrid">
+              <button class="grid-letter-btn" data-letter="A">A</button>
+              <button class="grid-letter-btn" data-letter="B">B</button>
+              <button class="grid-letter-btn" data-letter="C">C</button>
+              <button class="grid-letter-btn" data-letter="D">D</button>
+              <button class="grid-letter-btn" data-letter="E">E</button>
+              <button class="grid-letter-btn" data-letter="F">F</button>
+              <button class="grid-letter-btn" data-letter="G">G</button>
+              <button class="grid-letter-btn" data-letter="H">H</button>
+              <button class="grid-letter-btn" data-letter="I">I</button>
+              <button class="grid-letter-btn" data-letter="J">J</button>
+              <button class="grid-letter-btn" data-letter="K">K</button>
+              <button class="grid-letter-btn" data-letter="L">L</button>
+              <button class="grid-letter-btn" data-letter="M">M</button>
+              <button class="grid-letter-btn" data-letter="N">N</button>
+              <button class="grid-letter-btn" data-letter="O">O</button>
+              <button class="grid-letter-btn" data-letter="P">P</button>
+              <button class="grid-letter-btn" data-letter="Q">Q</button>
+              <button class="grid-letter-btn" data-letter="R">R</button>
+              <button class="grid-letter-btn" data-letter="S">S</button>
+              <button class="grid-letter-btn" data-letter="T">T</button>
+              <button class="grid-letter-btn" data-letter="U">U</button>
+              <button class="grid-letter-btn" data-letter="V">V</button>
+              <button class="grid-letter-btn" data-letter="W">W</button>
+              <button class="grid-letter-btn" data-letter="X">X</button>
+              <button class="grid-letter-btn" data-letter="Y">Y</button>
+              <button class="grid-letter-btn" data-letter="Z">Z</button>
+            </div>
+
+            <div class="guide-tip">
+              <span class="tip-icon">💡</span>
+              <p>Green glow highlights the letter recognized in real time by your webcam feed!</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Debug / Landmark Inspector -->
+        <div class="card debug-card">
+          <div class="card-header accordion-toggle" id="debugToggleHeader">
+            <h2>Landmark Data Inspector</h2>
+            <span class="arrow-icon">▼</span>
+          </div>
+          <div class="debug-content" id="debugContent">
+            <div class="debug-row">
+              <span>Handedness:</span>
+              <strong id="debugHandedness">None</strong>
+            </div>
+            <div class="debug-row">
+              <span>Wrist Coordinates:</span>
+              <span id="debugWrist">X: -, Y: -</span>
+            </div>
+            <div class="debug-row">
+              <span>Fingers Extended:</span>
+              <span id="debugFingers">Thumb: -, Index: -, Mid: -, Ring: -, Pinky: -</span>
+            </div>
+            <div class="debug-row">
+              <span>Thumb-Index Distance:</span>
+              <span id="debugThumbDist">-</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <p>Sign-Language-to-Text-Conversion Project • Computer Vision & Machine Learning • Powered by MediaPipe Hands & OpenCV Pipeline</p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
